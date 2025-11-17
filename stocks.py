@@ -5,6 +5,7 @@ import json
 import requests
 import datetime
 import matplotlib.pyplot as plt
+from functools import lru_cache
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
@@ -17,6 +18,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 FINNHUB_API_KEY = "d0suae9r01qid5qbgqjgd0suae9r01qid5qbgqk0"
+REQUEST_TIMEOUT = 10  # seconds
 
 class StockDashboard(QWidget):
     def __init__(self):
@@ -30,6 +32,11 @@ class StockDashboard(QWidget):
         self.website_label = QLabel()
         self.website_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self.website_label.setOpenExternalLinks(True)
+        
+        # Cache for API responses (symbol -> data, timestamp)
+        self.quote_cache = {}
+        self.profile_cache = {}
+        self.cache_duration = 60  # Cache valid for 60 seconds
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
@@ -167,11 +174,12 @@ class StockDashboard(QWidget):
 
         if logo_url:
             try:
-                response = requests.get(logo_url)
+                response = requests.get(logo_url, timeout=REQUEST_TIMEOUT)
+                response.raise_for_status()
                 pixmap = QPixmap()
                 pixmap.loadFromData(response.content)
                 self.logo_label.setPixmap(pixmap.scaled(self.logo_label.size(), Qt.KeepAspectRatio))
-            except Exception as e:
+            except requests.exceptions.RequestException as e:
                 print(f"Error loading logo: {e}")
                 self.logo_label.setText("No Logo Available")
         else:
@@ -205,7 +213,8 @@ class StockDashboard(QWidget):
             today = datetime.date.today()
             from_date = today - datetime.timedelta(days=7)
             url = f"https://finnhub.io/api/v1/company-news?symbol={symbol}&from={from_date}&to={today}&token={FINNHUB_API_KEY}"
-            response = requests.get(url)
+            response = requests.get(url, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
             data = response.json()
 
             headlines = []
@@ -216,7 +225,10 @@ class StockDashboard(QWidget):
                     headlines.append(f"<a href=\"{link}\">{title}</a>")
 
             return headlines or ["No news articles found."]
-        except Exception as e:
+        except requests.exceptions.Timeout:
+            print(f"Timeout fetching news for {symbol}")
+            return ["<b>Error:</b> Request timed out"]
+        except requests.exceptions.RequestException as e:
             print(f"Error fetching news for {symbol}: {e}")
             return [f"<b>Error fetching news:</b> {e}"]
 
@@ -235,14 +247,42 @@ class StockDashboard(QWidget):
         self.news_box.setText(f"<b>News for {symbol}:</b><br><br>" + "<br><br>".join(headlines))
 
     def get_quote(self, symbol):
-        url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={FINNHUB_API_KEY}"
-        response = requests.get(url)
-        return response.json()
+        # Check cache first
+        now = datetime.datetime.now()
+        if symbol in self.quote_cache:
+            data, timestamp = self.quote_cache[symbol]
+            if (now - timestamp).total_seconds() < self.cache_duration:
+                return data
+        
+        try:
+            url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={FINNHUB_API_KEY}"
+            response = requests.get(url, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+            self.quote_cache[symbol] = (data, now)
+            return data
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching quote for {symbol}: {e}")
+            return {}
 
     def get_profile(self, symbol):
-        url = f"https://finnhub.io/api/v1/stock/profile2?symbol={symbol}&token={FINNHUB_API_KEY}"
-        response = requests.get(url)
-        return response.json()
+        # Check cache first
+        now = datetime.datetime.now()
+        if symbol in self.profile_cache:
+            data, timestamp = self.profile_cache[symbol]
+            if (now - timestamp).total_seconds() < self.cache_duration:
+                return data
+        
+        try:
+            url = f"https://finnhub.io/api/v1/stock/profile2?symbol={symbol}&token={FINNHUB_API_KEY}"
+            response = requests.get(url, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+            self.profile_cache[symbol] = (data, now)
+            return data
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching profile for {symbol}: {e}")
+            return {}
 
     def add_or_update_stock(self):
         symbol = self.symbol_input.text().strip().upper()
@@ -335,12 +375,16 @@ class StockDashboard(QWidget):
             try:
                 quote = self.get_quote(symbol)
                 profile = self.get_profile(symbol)
+                
+                # Validate quote data
+                if not quote or 'c' not in quote:
+                    raise ValueError("Invalid quote data")
 
                 price = quote['c']
-                open_price = quote['o']
-                high_price = quote['h']
-                low_price = quote['l']
-                prev_close = quote['pc']
+                open_price = quote.get('o', 0)
+                high_price = quote.get('h', 0)
+                low_price = quote.get('l', 0)
+                prev_close = quote.get('pc', 0)
                 exchange = profile.get('exchange', 'N/A')
                 industry = profile.get('finnhubIndustry', 'N/A')
 

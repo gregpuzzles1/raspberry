@@ -1,7 +1,6 @@
 import RPi.GPIO as GPIO
 import time
 import random
-import gc
 
 # === GPIO Pin Setup ===
 RED_PIN = 17
@@ -37,7 +36,7 @@ try:
         green_pwm.ChangeDutyCycle(g)
         blue_pwm.ChangeDutyCycle(b)
 
-        time.sleep(0.2)  # 10 times per second
+        time.sleep(0.2)  # 5 times per second
 
 except KeyboardInterrupt:
     print("\nProgram stopped by user.")
@@ -52,6 +51,5 @@ finally:
     green_pwm.stop()
     blue_pwm.stop()
 
-    gc.collect()
     GPIO.cleanup()
     print("GPIO cleaned up.")

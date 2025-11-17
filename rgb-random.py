@@ -1,7 +1,6 @@
 import warnings
 from gpiozero.pins.rpigpio import RPiGPIOFactory
 from gpiozero import Device
-import gc
 
 # Force gpiozero to use RPi.GPIO
 Device.pin_factory = RPiGPIOFactory()
@@ -28,17 +27,14 @@ colors = [
 
 try:
     while True:
-        # Shuffle the color list in random order each time through
-        random.shuffle(colors)
-
-        for color in colors:
-            led.color = color
-            sleep(0.25)
-            led.off()
-            sleep(0.1)
+        # Use random.choice instead of shuffling entire list
+        color = random.choice(colors)
+        led.color = color
+        sleep(0.25)
+        led.off()
+        sleep(0.1)
 
 except KeyboardInterrupt:
     led.off()
     print("\nRandom color cycle stopped by user.")
-    gc.collect()
 

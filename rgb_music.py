@@ -1,7 +1,6 @@
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import sys
-import gc
 sys.excepthook = lambda *args: None
 import numpy as np
 from pydub import AudioSegment
@@ -41,10 +40,13 @@ if channels == 2:
     samples = samples.mean(axis=1)
 
 # Normalize to -1.0 to 1.0
-samples = samples / np.max(np.abs(samples))
+max_abs = np.max(np.abs(samples))
+if max_abs > 0:  # Avoid division by zero
+    samples = samples / max_abs
 
 chunk_size = 1024  # Adjust this for smoother/faster response
 num_chunks = len(samples) // chunk_size
+sleep_time = chunk_size / sample_rate  # Pre-calculate sleep time
 
 def process_audio():
     for i in range(num_chunks):
@@ -64,7 +66,7 @@ def process_audio():
         green_pwm.ChangeDutyCycle(mids_val)
         blue_pwm.ChangeDutyCycle(treble_val)
 
-        time.sleep(chunk_size / sample_rate)
+        time.sleep(sleep_time)
 
 def play_music():
     play(song)
@@ -92,6 +94,5 @@ finally:
         print("Error during PWM cleanup:", e)
 
     GPIO.cleanup()
-    gc.collect()
     print("GPIO cleaned up successfully.")
 

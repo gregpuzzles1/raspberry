@@ -2,7 +2,6 @@ import pygame
 import random
 import time
 import sys
-import threading
 
 # Initialize pygame
 pygame.init()
@@ -40,19 +39,19 @@ text_index = 0
 text_timer = 0
 text_delay = 100  # Delay in frames before changing text
 
+clock = pygame.time.Clock()
 running = True
-
-# Function to listen for Enter key in a separate thread
-def listen_for_exit():
-    global running
-    sys.stdin.read(1)  # Wait for a single key press (Enter)
-    running = False
-
-# Start listening for Enter key in the background
-threading.Thread(target=listen_for_exit, daemon=True).start()
 
 # Main loop
 while running:
+    # Handle pygame events instead of threading
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE:
+                running = False
+    
     screen.fill(GREEN)  # Background representing a grassy field
     
     # Update text timer
@@ -79,7 +78,7 @@ while running:
     screen.blit(ball_img, (ball_x, ball_y))
     
     pygame.display.flip()
-    pygame.time.delay(30)  # Smooth animation
+    clock.tick(30)  # Use clock for consistent framerate
 
 pygame.quit()
 

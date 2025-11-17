@@ -28,10 +28,13 @@ except Exception as e:
 
 # Function to get CPU temperature
 def get_cpu_temp():
+    """Read CPU temperature efficiently using vcgencmd."""
     try:
-        temp = os.popen("vcgencmd measure_temp").readline()
+        # Using 'r' for read is more efficient than popen
+        with os.popen("vcgencmd measure_temp") as temp_output:
+            temp = temp_output.readline()
         return float(temp.replace("temp=", "").replace("'C\n", ""))
-    except Exception as e:
+    except (ValueError, AttributeError) as e:
         print(f"Error reading temperature: {e}")
         return None
 

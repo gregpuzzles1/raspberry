@@ -75,20 +75,30 @@ def spawn_ant(x, y, team_list, ant_type):
     grid[y][x] = ant_type
 
 def bfs(start, targets):
+    if not targets:  # Early exit if no targets
+        return None
+    if start in targets:  # Already at target
+        return start
+    
     visited = set()
     queue = deque([(start, [])])
+    
     while queue:
         (x, y), path = queue.popleft()
         if (x, y) in visited:
             continue
         visited.add((x, y))
-        if (x, y) in targets:
-            return path[0] if path else (x, y)
+        
+        # Check neighbors first before adding to queue
         for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
             nx, ny = x + dx, y + dy
+            if (nx, ny) in targets:  # Found target - return immediately
+                return path[0] if path else (nx, ny)
+            
             if 0 <= nx < MAP_WIDTH and 0 <= ny < MAP_HEIGHT:
                 if grid[ny][nx] in [EMPTY, FOOD] and (nx, ny) not in visited:
                     queue.append(((nx, ny), path + [(nx, ny)]))
+    
     return None
 
 def attack(ant, enemy_team, team_score):
@@ -106,17 +116,29 @@ def attack(ant, enemy_team, team_score):
 
 def move_ant(ant, team, enemy_team, team_score, symbol):
     global ally_food_bank, enemy_food_bank
+    
     if ant['type'] == WARRIOR:
         attack(ant, enemy_team, team_score)
-        target = bfs((ant['x'], ant['y']), {(e['x'], e['y']) for e in enemy_team})
+        enemy_positions = {(e['x'], e['y']) for e in enemy_team}
+        if not enemy_positions:  # No enemies to target
+            return
+        target = bfs((ant['x'], ant['y']), enemy_positions)
     else:
+        if not food_positions:  # No food available
+            return
         target = bfs((ant['x'], ant['y']), set(food_positions))
+    
     if not target:
         return
+    
     nx, ny = target
     if grid[ny][nx] not in [EMPTY, FOOD]:
         return
-    grid[ant['y']][ant['x']] = EMPTY if (ant['x'], ant['y']) not in [ally_colony, enemy_colony] else symbol
+    
+    # Update grid
+    current_pos = (ant['x'], ant['y'])
+    grid[ant['y']][ant['x']] = EMPTY if current_pos not in [ally_colony, enemy_colony] else symbol
+    
     if grid[ny][nx] == FOOD and ant['type'] == FORAGER:
         if (nx, ny) in food_positions:
             food_positions.remove((nx, ny))
@@ -125,6 +147,7 @@ def move_ant(ant, team, enemy_team, team_score, symbol):
                 ally_food_bank += 1
             else:
                 enemy_food_bank += 1
+    
     ant['tx'], ant['ty'] = nx, ny
     ant['fx'] = (nx - ant['x']) * TILE_SIZE / MOVE_FRAMES
     ant['fy'] = (ny - ant['y']) * TILE_SIZE / MOVE_FRAMES

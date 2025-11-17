@@ -24,12 +24,13 @@ class HanoiVisualizer(QGraphicsView):
         self.disc_height = 20
         self.peg_base_y = 350
 
-        self.move_list = []
+        self.move_generator = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.next_move)
 
         self.init_discs()
-        self.solve_hanoi(self.num_discs, 'A', 'B', 'C')
+        # Initialize generator instead of pre-computing all moves
+        self.move_generator = self.solve_hanoi(self.num_discs, 'A', 'B', 'C')
         self.timer.start(1000)
 
     def init_discs(self):
@@ -46,22 +47,22 @@ class HanoiVisualizer(QGraphicsView):
         disc.setPos(x, y)
 
     def solve_hanoi(self, n, source, auxiliary, target):
+        """Generator that yields moves one at a time instead of storing all moves."""
         if n == 1:
-            self.move_list.append((source, target))
+            yield (source, target)
         else:
-            self.solve_hanoi(n - 1, source, target, auxiliary)
-            self.move_list.append((source, target))
-            self.solve_hanoi(n - 1, auxiliary, source, target)
+            yield from self.solve_hanoi(n - 1, source, target, auxiliary)
+            yield (source, target)
+            yield from self.solve_hanoi(n - 1, auxiliary, source, target)
 
     def next_move(self):
-        if not self.move_list:
+        try:
+            source, target = next(self.move_generator)
+            disc = self.pegs[source].pop()
+            self.pegs[target].append(disc)
+            self.place_disc(disc, target, len(self.pegs[target]) - 1)
+        except StopIteration:
             self.timer.stop()
-            return
-
-        source, target = self.move_list.pop(0)
-        disc = self.pegs[source].pop()
-        self.pegs[target].append(disc)
-        self.place_disc(disc, target, len(self.pegs[target]) - 1)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
